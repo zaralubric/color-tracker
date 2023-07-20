@@ -1,0 +1,13 @@
+
+# pkg-config file for uninstalled ColorTracker interface and codels library
+#
+prefix=@abs_top_builddir@
+libdir=${prefix}/codels
+includedir=${prefix}/codels
+
+Name: ColorTracker-genom3
+Description: ColorTracker interface and codels library
+Version: @PACKAGE_VERSION@
+Requires: openrobots2-idl >= 2.1, felix-idl, vision-idl
+Libs: ${libdir}/libColorTracker_codels.la
+Libs.private: @codels_requires_LIBS@

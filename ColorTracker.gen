@@ -1,0 +1,138 @@
+/*
+ * Copyright (c) 2022-2022 LAAS/CNRS
+ *
+ * Author: Selvakumar H S - LAAS/CNRS
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#pragma require "openrobots2-idl >= 2.1"
+#pragma require "felix-idl"
+#pragma require "vision-idl"
+
+#include "or/pose/pose_estimator.gen"
+#include "or/pose/rigid_body.gen"
+#include "or/sensor/camera.gen"
+
+#include "ColorTrack.idl"
+#include "Environment.idl"
+
+
+/* -------------------------- MODULE DECLARATION --------------------------- */
+component ColorTracker {
+  version "1.0";
+  email	  "shasthamsa@laas.fr";
+  lang	  "c";
+  doc 	  "A GenoM module for the ColorTracker using a monocular camera.";
+
+  codels-require "opencv4, felix-g3utils, eigen3, vision-idl";
+  uses		or_pose_estimator;
+
+  exception e_BAD_IMAGE_PORT { short code; string<128> message; };
+  exception e_BAD_POSE_PORT { short code; string<128> message; };
+  exception e_BAD_OG_PORT { short code; string<128> message; };
+  exception e_BAD_TARGET_PORT { short code; string<128> message; };
+  exception e_OPENCV_ERROR { short code; string<128> message; };
+  exception e_OUT_OF_MEM { short code; string<128> message; };
+
+
+  struct BlobMap {
+    boolean is_blobbed;
+    or::Environment::OccupancyGrid grid_map;
+    short index;
+  };
+
+  /* -------------------------- IDS --------------------------- */
+  ids {
+    or::sensor::intrinsics intrinsics;	        // Camera intrinsics
+    or::sensor::extrinsics extrinsics;	        // Camera extrinsics
+    or::sensor::frame image_frame;		        // Image frame
+    or::ColorTrack::PlateSequence plates;       // The plates sequence
+    or::ColorTrack::ColorInfo color;	        // The color of the object to track
+
+    BlobMap blob_map;
+    boolean new_findings;	// true when a new findings has been found and can be published.
+
+    unsigned short current_index;	// current free index in the plate sequence
+
+    or_rigid_body::state tracked_pose;
+    or_rigid_body::state frame_pose;
+
+    boolean debug;
+  };
+
+  /* ------------- DEFINITION OF PORTS -------------- */
+  // Robot
+  port in or_pose_estimator::state Pose;
+
+  // Camera
+  port in or::sensor::frame Frame {
+    doc "The image frame to process.";
+  };
+  port in or::sensor::intrinsics Intrinsics;
+  port in or::sensor::extrinsics Extrinsics;
+
+  // Navigation
+  port out or::Environment::OccupancyGrid OccupancyGrid {
+    doc "To visualise the findings in desired tool.";};
+
+  port multiple out or_pose_estimator::state TrackedPose { // TODO: Port for array of poses
+    doc "The pose of the tracked object.";};
+
+  // ColorTracker
+  port out or::ColorTrack::PlateSequence Plates; // The plates sequence
+
+  port out or_rigid_body::state TargetPose;
+
+
+  /* -------------------------- ATTRIBUTES --------------------------- */
+  attribute SetDebug (in debug) {
+    doc "Set the debug mode.";
+  };
+
+  /* ------------------ TASK DEFINITION -------------------- */
+  task track {
+    // period 100 ms;
+    doc "Track the object in the image.";
+
+    codel <start> FetchPorts(port in Frame, port in Intrinsics, port in Extrinsics, port in Pose)
+          yield pause::start, ready;
+    codel <ready> InitIDS(port in Frame, port in Intrinsics, port in Extrinsics,
+          ids out image_frame, ids out intrinsics, ids out extrinsics, ids out tracked_pose, ids out blob_map)
+          yield pause::ready, main, ether;
+    codel <main> TrackObject(ids in image_frame, ids in intrinsics, ids in extrinsics, ids in color, ids inout tracked_pose, ids out blob_map, ids out new_findings,
+          port out OccupancyGrid, port out TrackedPose, ids in debug)
+          yield pause::main, publish, ether;
+    codel <publish> PublishOG(ids in blob_map, port out OccupancyGrid)
+          yield main, ether;
+    throw e_OUT_OF_MEM, e_BAD_IMAGE_PORT;
+  };
+
+  /* ------------------ SERVICE DEFINITION: Attributes -------------------- */
+
+
+  /* ------------------ SERVICE DEFINITION: Functions -------------------- */
+  function set_color(in or::ColorTrack::ColorInfo color_info =: "Color to be detected")
+  {
+    doc "Set the color to be detected.";
+    codel SetColor(local in color_info, ids out color);
+    throw e_OPENCV_ERROR;
+  };
+
+  function set_map_size(in octet map_width =: "Estimated map width", in octet map_height =: "Estimated map height")
+  {
+    doc "Set the size of the map.";
+    codel SetMapSize(local in map_width, local in map_height, ids out blob_map);
+    throw e_BAD_OG_PORT;
+  };
+};

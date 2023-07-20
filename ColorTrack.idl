@@ -1,0 +1,33 @@
+#ifndef IDL_COLOR_TRACK_STRUCT
+#define IDL_COLOR_TRACK_STRUCT
+
+module or {
+module ColorTrack {
+
+  enum PlateState {
+		   UNKNOWN, INTERESTING, TREATED, NOT_NTERESTING
+  };
+
+  struct PlateInfo {
+    short index;
+    short nb_images;
+    PlateState state;
+    or::t3d::pos coord;
+  };
+
+  struct PlateSequence{
+    sequence<PlateInfo> seq;
+  };
+
+  // Color Information for blob detection
+  struct ColorInfo {
+    octet r;
+    octet g;
+    octet b;
+    octet threshold;
+  };
+
+};
+};
+
+#endif

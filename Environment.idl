@@ -1,0 +1,22 @@
+#ifndef IDL_ENVIRONMENT_STRUCT
+#define IDL_ENVIRONMENT_STRUCT
+
+module or {
+module Environment {
+
+    const double MapResolution = 0.05; // 5cm
+    const short MapWidth = 10; // 10m
+    const short MapHeight = 10; // 10m
+
+    struct OccupancyGrid {
+        double data[MapWidth][MapHeight];
+        octet width;
+        octet height;
+        double resolution;
+        double origin_x;
+        double origin_y;
+    };
+};
+};
+
+# endif
